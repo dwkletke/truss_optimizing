@@ -1,4 +1,3 @@
-from cmath import pi
 import numpy
 import matplotlib.pyplot as plt
 
@@ -80,10 +79,12 @@ def total_mass(m1, m2, m3, m4):
 
 def find_mass_balsa(w, l, is_beam):
     if is_beam:
-        return 2 * (pi * (((w + hole_size) / 2) ** 2) * thickness) - (pi * ((hole_size / 2) ** 2) * thickness) + (
+        return 2 * (numpy.pi * (((w + hole_size) / 2) ** 2) * thickness) - (
+                    numpy.pi * ((hole_size / 2) ** 2) * thickness) + (
                 w * thickness * l * density_board) + 2 * ((w + thickness) * thickness * l * density_board)
     else:
-        return 2 * (pi * (((w + hole_size) / 2) ** 2) * thickness) - (pi * ((hole_size / 2) ** 2) * thickness) + (
+        return 2 * (numpy.pi * (((w + hole_size) / 2) ** 2) * thickness) - (
+                    numpy.pi * ((hole_size / 2) ** 2) * thickness) + (
                 w * thickness * l * density_board)
 
 
@@ -94,16 +95,17 @@ def ibeam_strength(w, l):
 def comp_strength(w, l):
     return find_buckling(l, get_inertia(w))
 
+
 def calc_width(f, f_ratio):
     return f * f_ratio / (thickness * ten_stress)
 
 
 def calc_width_from_buck(f, l):
-    return (f * (l ** 2) * 12) / ((pi ** 2) * E * (thickness ** 3))
+    return (f * (l ** 2) * 12) / ((numpy.pi ** 2) * E * (thickness ** 3))
 
 
 def calc_width_for_ibeam(f, l):  # for members experiencing buckling with i-beam
-    return (f * (l ** 2) * 12) / ((pi ** 2) * E * (thickness ** 3))
+    return (f * (l ** 2) * 12) / ((numpy.pi ** 2) * E * (thickness ** 3))
 
 
 def get_inertia(w):
@@ -111,12 +113,12 @@ def get_inertia(w):
 
 
 def find_buckling(l, inertia):
-    return (pi ** 2) * E * inertia / (l ** 2)
+    return (numpy.pi ** 2) * E * inertia / (l ** 2)
 
 
 def find_ixx(w1, w2):
     return ((w1 ** 3) * thickness) / 12 + 2 * (
-                (((thickness ** 3) * w2) / 12) + (((thickness * w2) * ((w1 + thickness) ** 2)) / 4))
+            (((thickness ** 3) * w2) / 12) + (((thickness * w2) * ((w1 + thickness) ** 2)) / 4))
 
 
 def find_iyy(w1, w2):
@@ -206,8 +208,6 @@ def plot_mass_vs_ibeam_vs_comp():
     plt.show()
 
 
-
 plot_mass_vs_ibeam_vs_comp()
-
 
 # Find width from width vs force for exact number
