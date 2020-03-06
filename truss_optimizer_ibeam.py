@@ -18,43 +18,39 @@ dowel_mass = 0.00041 * num_dowels
 hole_size = 0.0033
 E = 3.39e9
 g = 9.81
+dowel_max_moment = 0.368
+dowel_radius = 0.0033
+dowel_inertia = (1/4) * (dowel_radius ** 4)
+dowel_max_bending_stress = dowel_max_moment * dowel_radius / dowel_inertia
 
 
-# Finding PV based on failure for a compressive member either with Ixx inertia for a I beam or a regular inertia
-def find_pv_ixx(w, member, beam):
-    if member == 1:
-        b1 = find_buckling(length_1, find_ixx(w, w + thickness), beam)
-        m1 = find_mass_balsa(w, length_1, True)
+# Finding PV based on failure for a compressive member either with Ixx inertia, Iyy inertia (for a I or T beam), or
+# regular inertia
+def find_pv(w, member, beam, inertia_type):
+    if member == 1: # top compression member
+        b1 = 0
+        if inertia_type == "ixx":
+            b1 = find_buckling(length_1, find_ixx(w, w + thickness))
+        elif inertia_type == "iyy":
+            b1 = find_buckling(length_1, find_iyy(w, w + thickness))
+        m1 = find_mass_balsa(w, length_1, beam)
         w2 = calc_width_from_buck(b1 * f_ratio_2, length_2)
-        m2 = find_mass_balsa(w2, length_2, False)
-    else:
+        m2 = find_mass_balsa(w2, length_2, "no")
+    elif member == 2: # side compression member
         b1 = find_buckling(length_2, get_inertia(w))
-        m1 = find_mass_balsa(w, length_2, False)
+        m1 = find_mass_balsa(w, length_2, "no")
         w2 = calc_width_from_buck(b1 * f_ratio_1, length_1)
-        m2 = find_mass_balsa(w2, length_1, False)
-    w3 = calc_width(b1, f_ratio_3)
-    m3 = find_mass_balsa(w3, length_3, False)
-    w4 = calc_width(b1, f_ratio_4)
-    m4 = find_mass_balsa(w4, length_4, False)
-    return (b1 / g) / total_mass(m1, m2, m3, m4)
-
-
-# Finding PV based on failure for a compressive member either with Iyy inertia for a I or T beam or a regular inertia
-def find_pv_iyy(w, member, beam):
-    if member == 1:
-        b1 = find_buckling(length_1, find_iyy(w, w + thickness), beam)
-        m1 = find_mass_balsa(w, length_1, True)
+        m2 = find_mass_balsa(w2, length_1, "no")
+    else: # else, assume failure occurs at center loaded pin
+        b1 = find_dowel_bending(w)
+        w1 = calc_width_from_buck(b1, length_1)
+        m1 = find_mass_balsa(w1, length_1, beam)
         w2 = calc_width_from_buck(b1 * f_ratio_2, length_2)
-        m2 = find_mass_balsa(w2, length_2, False)
-    else:
-        b1 = find_buckling(length_2, get_inertia(w))
-        m1 = find_mass_balsa(w, length_2, False)
-        w2 = calc_width_from_buck(b1 * f_ratio_1, length_1)
-        m2 = find_mass_balsa(w2, length_1, False)
+        m2 = find_mass_balsa(w2, length_2, "no")
     w3 = calc_width(b1, f_ratio_3)
-    m3 = find_mass_balsa(w3, length_3, False)
+    m3 = find_mass_balsa(w3, length_3, "no")
     w4 = calc_width(b1, f_ratio_4)
-    m4 = find_mass_balsa(w4, length_4, False)
+    m4 = find_mass_balsa(w4, length_4, "no")
     return (b1 / g) / total_mass(m1, m2, m3, m4)
 
 
@@ -62,18 +58,18 @@ def find_pv_iyy(w, member, beam):
 def find_mass_for_plot(w, beam):
     if beam == "t" or "i":
         b1 = find_buckling(length_1, find_iyy(w, w), beam)
-        m1 = find_mass_balsa(w, length_1, True)
+        m1 = find_mass_balsa(w, length_1, beam)
         w2 = calc_width_from_buck(b1 * f_ratio_2, length_2)
-        m2 = find_mass_balsa(w2, length_2, False)
+        m2 = find_mass_balsa(w2, length_2, "no")
     else:
         b1 = find_buckling(length_2, get_inertia(w))
-        m1 = find_mass_balsa(w, length_2, False)
+        m1 = find_mass_balsa(w, length_2, "no")
         w2 = calc_width_from_buck(b1 * f_ratio_1, length_1)
-        m2 = find_mass_balsa(w2, length_1, False)
+        m2 = find_mass_balsa(w2, length_1, "no")
     w3 = calc_width(b1, f_ratio_3)
-    m3 = find_mass_balsa(w3, length_3, False)
+    m3 = find_mass_balsa(w3, length_3, "no")
     w4 = calc_width(b1, f_ratio_4)
-    m4 = find_mass_balsa(w4, length_4, False)
+    m4 = find_mass_balsa(w4, length_4, "no")
     return total_mass(m1, m2, m3, m4)
 
 
@@ -128,18 +124,10 @@ def get_inertia(w):
     return (w * (thickness ** 3)) / 12
 
 
-# Calculates max buckling force based on length and inertia
-def find_buckling(l, inertia):
-    return (numpy.pi ** 2) * E * inertia / (l ** 2)
-
-
 # Find Ixx will always be larger than Iyy for our purpose, so we only care about Iyy
-def find_ixx(w1, w2, beam):
-    if beam == "i":
-        return ((w1 ** 3) * thickness) / 12 + 2 * (
-            (((thickness ** 3) * w2) / 12) + (((thickness * w2) * ((w1 + thickness) ** 2)) / 4))
-    elif beam == "t":
-        return 0
+def find_ixx(w1, w2):
+    return ((w1 ** 3) * thickness) / 12 + 2 * (
+                (((thickness ** 3) * w2) / 12) + (((thickness * w2) * ((w1 + thickness) ** 2)) / 4))
 
 
 # Find Iyy Inertia (is the same for a I and a T beam)
@@ -147,7 +135,17 @@ def find_iyy(w1, w2):
     return (((thickness ** 3) * w1) / 12) + (2 * (((w2 ** 3) * thickness) / 12))
 
 
-# Finds tension force based on width and length
+# Calculates max buckling force based on length
+def find_dowel_bending(l):
+    return dowel_max_bending_stress * numpy.pi * (dowel_radius ** 3) / l
+
+
+# Calculates max buckling force for a compression member based on length and inertia
+def find_buckling(l, inertia):
+    return (numpy.pi ** 2) * E * inertia / (l ** 2)
+
+
+# Finds tension force for a tension member based on width and length
 def get_tension(w, l):
     return ten_stress * w * l
 
@@ -158,20 +156,30 @@ def plot_width_vs_force(member):
     buckling_values_side = list()
     tension_member_3 = list()
     tension_member_4 = list()
-    x = numpy.arange(0.001, 0.01, 0.0001)
+    dowel_fail = list()
+    x = numpy.arange(0.001, 0.02, 0.0001)
     for i in x:
         buckling_values_top.append(find_buckling(length_1, find_iyy(i, i + thickness)))
         buckling_values_side.append(find_buckling(length_2, get_inertia(i)))
         tension_member_3.append(get_tension(i, length_3))
         tension_member_4.append(get_tension(i, length_4))
+        dowel_fail.append(find_dowel_bending(i))
     if member == 1:
         plt.plot(x, buckling_values_top, 'b', label="Top Compression Member")
     elif member == 2:
         plt.plot(x, buckling_values_side, 'r', label="Side Compression Member")
     elif member == 3:
         plt.plot(x, tension_member_3, 'g', label="Top Tension Member")
-    else:
+    elif member == 4:
         plt.plot(x, tension_member_4, 'y', label="Bottom Tension Member")
+    elif member == 5:
+        plt.plot(x, dowel_fail, 'm', label="Dowel")
+    else:
+        plt.plot(x, buckling_values_top, 'b', label="Top Compression Member")
+        plt.plot(x, buckling_values_side, 'r', label="Side Compression Member")
+        plt.plot(x, tension_member_3, 'g', label="Top Tension Member")
+        plt.plot(x, tension_member_4, 'y', label="Bottom Tension Member")
+        plt.plot(x, dowel_fail, 'm', label="Dowel")
     plt.legend(loc="upper left")
     plt.xlabel('Width [m]')
     plt.ylabel('Force [N]')
@@ -180,26 +188,33 @@ def plot_width_vs_force(member):
 
 
 # Plots width vs pv based on input member as failure mode
-def plot_width_vs_pv(member):
+def plot_width_vs_pv(member, beam, dowel):
     pv_values_ixx = list()
     pv_values_iyy = list()
-    x = numpy.arange(0.001, 0.01, 0.0001)
+    pv_values_dowel = list()
+    x = numpy.arange(0.001, 0.02, 0.0001)
     for i in x:
-        pv_values_ixx.append(find_pv_ixx(i, member))
-        pv_values_iyy.append(find_pv_iyy(i, member))
-    plt.plot(x, pv_values_ixx, 'b', label="Ixx")
-    plt.plot(x, pv_values_iyy, 'r', label="Iyy")
+        pv_values_ixx.append(find_pv(i, member, beam, "ixx"))
+        pv_values_iyy.append(find_pv(i, member, beam, "iyy"))
+        pv_values_dowel.append(find_pv(i, member, beam, "dowel"))
+    if beam == "i" or beam == "t":
+        plt.plot(x, pv_values_ixx, 'b', label="Ixx")
+        plt.plot(x, pv_values_iyy, 'r', label="Iyy")
+        plt.xlabel('Width [m]')
+    if dowel:
+        plt.plot(x, pv_values_dowel, 'y', label="Dowel")
+        plt.xlabel('Length between Innermost Members [m]')  # Assuming load is in center of that length
     plt.legend(loc="lower right")
-    plt.xlabel('Width [m]')
+
     plt.ylabel('PV [kg/kg]')
-    plt.title('Width vs. PV (I-Beam)')
+    plt.title('Width vs. PV')
     plt.show()
 
 
 # Plots width vs mass based on input beam
 def plot_width_vs_mass(beam):
     mass_values = list()
-    x = numpy.arange(0.001, 0.01, 0.0001)
+    x = numpy.arange(0.001, 0.02, 0.0001)
     for i in x:
         mass_values.append(find_mass_for_plot(i, beam))
     plt.plot(x, mass_values, 'b', label="Total Mass")
@@ -216,7 +231,7 @@ def plot_mass_vs_ibeam_vs_comp():
     ibeam_strength_values = list()
     comp_strength_values = list()
 
-    x = numpy.arange(0.001, 0.01, 0.0001)
+    x = numpy.arange(0.001, 0.02, 0.0001)
     for i, val in enumerate(x):
         mass_values.append(find_mass_balsa(val, length_1, True))
         ibeam_strength_values.append(beam_strength(val, length_1))
@@ -231,7 +246,13 @@ def plot_mass_vs_ibeam_vs_comp():
     plt.show()
 
 
-plot_width_vs_force(1)
+# Plotting all plots
 
-print(calc_width_from_buck(38.5, length_2))
-# Find width from width vs force for exact number
+# Plot 1: Width vs PV for both moments of inertia (Ixx & Iyy) for an I beam
+plot_width_vs_pv(1, "i", False)
+
+# Plot 2: Width vs PV for a T beam
+plot_width_vs_pv(1, "t", False)
+
+# Plot 3: Width vs PV for Dowels
+plot_width_vs_pv(5, "no", True)
